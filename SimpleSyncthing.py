@@ -1,12 +1,16 @@
 import base64
+import SyncthingSocket
+import struct
 import socket
 import ssl
 import BEP
+import lz4.block as lz4
 from cryptography import x509
 from cryptography.hazmat.backends import default_backend
 from cryptography.hazmat.primitives import hashes
 
 BASE32_ALPHABET = "ABCDEFGHIJKLMNOPQRSTUVWXYZ234567"
+MAX_SSL_FRAME = 16384
 
 
 def generate_luhn_char(datas):
@@ -47,25 +51,62 @@ def format_id(hashstring):
 
 cert = x509.load_pem_x509_certificate(open("cert.pem", "r").read(), default_backend())
 certHash = base64.b32encode(cert.fingerprint(hashes.SHA256()))
-sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-sock.settimeout(10)
-context = ssl.create_default_context(ssl.Purpose.CLIENT_AUTH, capath="cert.pem")
-ssl_sock = ssl.SSLContext.wrap_socket(context, sock)
-ssl_sock.connect(("129.194.186.177", 22000))
+device_id = format_id(certHash)
+
+sock = SyncthingSocket.SyncthingSocket("129.194.186.177", 22000, "cert.pem", "key.pem")
 
 hello = BEP.Hello()
-hello.device_name = "MichelLazeyras.local"
+hello.device_name = "MichelLazeyras"
 hello.client_name = "SimpleSyncthing"
 hello.client_version = "v0.0.1"
-hellom = hello.SerializeToString()
-print hellom
-packet = bytearray.fromhex("2EA7D90B")
-print packet
-packet += bytearray(len(hellom))
-packet += hellom
-ssl_sock.send(hello.SerializeToString())
-print ssl_sock.recv()
-ssl_sock.close()
+sock.send(hello, -1, hello=True)
+
+hello = sock.is_message_available(hello_expected=True)
+if hello is None:
+    exit()
+print "SimpleSyncthing : We're conntected to " + hello.device_name + " " + hello.client_name
+
+cluster = sock.is_message_available(cluster_expected=True)[0]
+if cluster is None:
+    exit()
+
+loc_cluster = BEP.ClusterConfig()
+for folder in cluster.folders:
+    loc_f = loc_cluster.folders.add()
+    dev = loc_f.devices.add()
+    for device in folder.devices:
+        if device.name == "MichelLazeyras":
+            dev.name = device.name
+            dev.id = device.id
+            for address in device.addresses:
+                dev.addresses.append(address)
+            dev.compression = device.compression
+            dev.cert_name = device.cert_name
+            dev.max_sequence = device.max_sequence
+            dev.introducer = device.introducer
+            dev.skip_introduction_removals = device.skip_introduction_removals
+    loc_f.id = folder.id
+    loc_f.read_only = folder.read_only
+    loc_f.ignore_permissions = folder.ignore_permissions
+    loc_f.ignore_delete = folder.ignore_delete
+    loc_f.disable_temp_indexes = folder.disable_temp_indexes
+
+
+sock.send(loc_cluster, BEP.MessageType.Value("CLUSTER_CONFIG"))
+
+running = True
+while running:
+    message_tuple = sock.is_message_available()
+    if message_tuple is None:
+        print "nothing, closing"
+        running = False
+        break
+
+    message = message_tuple[0]
+    m_type = message_tuple[1]
+    print m_type
+
+sock.close()
 
 
 
