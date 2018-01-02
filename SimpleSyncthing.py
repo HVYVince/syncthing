@@ -1,9 +1,10 @@
 import base64
 import SyncthingSocket
+import os
 import struct
 import socket
 import ssl
-import BEP
+import BEPv1_pb2 as BEP
 import lz4.block as lz4
 from cryptography import x509
 from cryptography.hazmat.backends import default_backend
@@ -11,6 +12,10 @@ from cryptography.hazmat.primitives import hashes
 
 BASE32_ALPHABET = "ABCDEFGHIJKLMNOPQRSTUVWXYZ234567"
 MAX_SSL_FRAME = 16384
+
+DEVICE_NAME = "MichelLazeyras"
+FOLDER_TARGET = "/home/gabriel/Bureau/bullshit/"
+REQUEST_ID = 0
 
 
 def generate_luhn_char(datas):
@@ -20,7 +25,7 @@ def generate_luhn_char(datas):
     total = 0
     n = len(BASE32_ALPHABET)
     for i in range(len(datas) - 1, -1, -1):
-        codepoint = BASE32_ALPHABET.index(datas[i])
+        codepoint = BASE32_ALPHABET.index(datas.decode('ascii')[i])
         addend = factor * codepoint
         if factor == 2:
             factor = 1
@@ -30,7 +35,7 @@ def generate_luhn_char(datas):
         total += addend
     remainder = total % n
     check = (n - remainder) % n
-    return BASE32_ALPHABET[check]
+    return BASE32_ALPHABET[int(check)]
 
 
 def format_id(hashstring):
@@ -41,7 +46,7 @@ def format_id(hashstring):
         substring = hashstring[i * 13:(i + 1) * 13]
         chksm = generate_luhn_char(substring)
         for j in range(0, 2):
-            resultstring += substring[j * 7 : (j + 1) * 7]
+            resultstring += substring[j * 7: (j + 1) * 7].decode('ascii')
             if j == 0:
                 resultstring += "-"
             else:
@@ -49,14 +54,14 @@ def format_id(hashstring):
     return resultstring[:len(resultstring) - 1]
 
 
-cert = x509.load_pem_x509_certificate(open("cert.pem", "r").read(), default_backend())
+cert = x509.load_pem_x509_certificate(open("cert.pem", "r").read().encode('ascii'), default_backend())
 certHash = base64.b32encode(cert.fingerprint(hashes.SHA256()))
 device_id = format_id(certHash)
 
 sock = SyncthingSocket.SyncthingSocket("129.194.186.177", 22000, "cert.pem", "key.pem")
 
 hello = BEP.Hello()
-hello.device_name = "MichelLazeyras"
+hello.device_name = DEVICE_NAME
 hello.client_name = "SimpleSyncthing"
 hello.client_version = "v0.0.1"
 sock.send(hello, -1, hello=True)
@@ -64,7 +69,7 @@ sock.send(hello, -1, hello=True)
 hello = sock.is_message_available(hello_expected=True)
 if hello is None:
     exit()
-print "SimpleSyncthing : We're conntected to " + hello.device_name + " " + hello.client_name
+print("SimpleSyncthing : We're conntected to " + hello.device_name + " " + hello.client_name)
 
 cluster = sock.is_message_available(cluster_expected=True)[0]
 if cluster is None:
@@ -75,7 +80,7 @@ for folder in cluster.folders:
     loc_f = loc_cluster.folders.add()
     dev = loc_f.devices.add()
     for device in folder.devices:
-        if device.name == "MichelLazeyras":
+        if device.name == DEVICE_NAME:
             dev.name = device.name
             dev.id = device.id
             for address in device.addresses:
@@ -94,17 +99,73 @@ for folder in cluster.folders:
 
 sock.send(loc_cluster, BEP.MessageType.Value("CLUSTER_CONFIG"))
 
+print("", file = open("output.txt", "w"))
+
+requestList = []
+fileList = []
 running = True
 while running:
     message_tuple = sock.is_message_available()
     if message_tuple is None:
-        print "nothing, closing"
+        print("nothing, closing")
         running = False
         break
 
     message = message_tuple[0]
     m_type = message_tuple[1]
-    print m_type
+
+    if m_type == "INDEX" or m_type == "INDEX_UPDATE":
+        # folders creation
+        os.makedirs(FOLDER_TARGET + message.folder, exist_ok=True)
+        # Let's fill folders
+        for file in message.files:
+            # we don't request for deleted files
+            if not file.deleted:
+                folder = FOLDER_TARGET + message.folder + "/" + file.name
+                # we directly create directories and symlinks
+                if file.type == BEP.FileInfoType.Value("DIRECTORY"):
+                    os.makedirs(folder, exist_ok=True)
+                    if file.no_permissions:
+                        os.chmod(folder, 0o666)
+                    else:
+                        os.chmod(folder, file.permissions)
+                        print(file.modified_s)
+                    #os.utime(folder, times=(file.modified_s, file.modified_s))
+                # we directly create symlinks
+                elif file.type == BEP.FileInfoType.Value("SYMLINK"):
+                    os.symlink(FOLDER_TARGET + message.folder + "/" + file.symlink_target, folder)
+                    #os.utime(folder, times=(file.modified_s, file.modified_s))
+                # else send request for files
+                else:
+                    request = BEP.Request()
+                    request.id = REQUEST_ID
+                    request.folder = message.folder
+                    request.name = file.name
+                    request.offset = 0
+                    request.size = file.size
+                    request.from_temporary = False
+                    # add request to request queue
+                    requestList.append(request)
+                    # add permissions
+                    fileList.append(file)
+                    sock.send(request, BEP.MessageType.Value("REQUEST"))
+                    REQUEST_ID += 1
+        print("---", file=open("output.txt", "a"))
+        print(message, file=open("output.txt", "a"))
+
+    if m_type == "RESPONSE":
+        response = requestList[message.id]
+        folder = FOLDER_TARGET + response.folder + "/" + response.name
+        with open(folder, 'wb') as f:
+            print("writing " + folder)
+            f.write(message.data)
+            if fileList[message.id].no_permissions:
+                os.chmod(folder, 0o666)
+            else:
+                os.chmod(folder, fileList[message.id].permissions)
+            os.utime(folder, times=(fileList[message.id].modified_s, fileList[message.id].modified_s))
+
+    # print(file, file=open("output.txt", "a"))
 
 sock.close()
 

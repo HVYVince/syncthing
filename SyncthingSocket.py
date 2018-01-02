@@ -1,6 +1,6 @@
 import socket
 import ssl
-import BEP
+import BEPv1_pb2 as BEP
 import struct
 import lz4.block as lz4
 
@@ -36,7 +36,7 @@ class SyncthingSocket(object):
 
             while message_len + header_len + 6 > MAX_SSL_FRAME and byte_count < message_len + header_len + 6:
                 receive += self.ssl_sock.recv(min(MAX_SSL_FRAME, (message_len + header_len + 6) - byte_count))
-                byte_count += len(receive) - byte_count
+                byte_count = len(receive)
 
         except ssl.SSLError:
             return None
