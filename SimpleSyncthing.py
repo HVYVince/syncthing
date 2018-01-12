@@ -1,11 +1,7 @@
 import base64
 import SyncthingSocket
 import os
-import struct
-import socket
-import ssl
-import BEPv1_pb2 as BEP
-import lz4.block as lz4
+import BEPv1_pb2 as bep
 from cryptography import x509
 from cryptography.hazmat.backends import default_backend
 from cryptography.hazmat.primitives import hashes
@@ -13,8 +9,8 @@ from cryptography.hazmat.primitives import hashes
 BASE32_ALPHABET = "ABCDEFGHIJKLMNOPQRSTUVWXYZ234567"
 MAX_SSL_FRAME = 16384
 
-DEVICE_NAME = "MichelLazeyras"
-FOLDER_TARGET = "/home/gabriel/Bureau/bullshit/"
+DEVICE_NAME = "Gabi"
+FOLDER_TARGET = "/Users/vincetournier/Documents/syncthing"
 REQUEST_ID = 0
 
 
@@ -59,23 +55,23 @@ certHash = base64.b32encode(cert.fingerprint(hashes.SHA256()))
 device_id = format_id(certHash)
 
 sock = SyncthingSocket.SyncthingSocket("129.194.186.177", 22000, "cert.pem", "key.pem")
-
-hello = BEP.Hello()
+hello = bep.Hello()
 hello.device_name = DEVICE_NAME
 hello.client_name = "SimpleSyncthing"
-hello.client_version = "v0.0.1"
+hello.client_version = "v0.14.43"
 sock.send(hello, -1, hello=True)
 
 hello = sock.is_message_available(hello_expected=True)
 if hello is None:
     exit()
-print("SimpleSyncthing : We're conntected to " + hello.device_name + " " + hello.client_name)
+print("SimpleSyncthing : We're connected to " + hello.device_name + " " + hello.client_name)
 
 cluster = sock.is_message_available(cluster_expected=True)[0]
+print(cluster)
 if cluster is None:
     exit()
 
-loc_cluster = BEP.ClusterConfig()
+loc_cluster = bep.ClusterConfig()
 for folder in cluster.folders:
     loc_f = loc_cluster.folders.add()
     dev = loc_f.devices.add()
@@ -97,9 +93,9 @@ for folder in cluster.folders:
     loc_f.disable_temp_indexes = folder.disable_temp_indexes
 
 
-sock.send(loc_cluster, BEP.MessageType.Value("CLUSTER_CONFIG"))
+sock.send(loc_cluster, bep.MessageType.Value("CLUSTER_CONFIG"))
 
-print("", file = open("output.txt", "w"))
+print("", file=open("output.txt", "w"))
 
 requestList = []
 fileList = []
@@ -123,7 +119,7 @@ while running:
             if not file.deleted:
                 folder = FOLDER_TARGET + message.folder + "/" + file.name
                 # we directly create directories and symlinks
-                if file.type == BEP.FileInfoType.Value("DIRECTORY"):
+                if file.type == bep.FileInfoType.Value("DIRECTORY"):
                     os.makedirs(folder, exist_ok=True)
                     if file.no_permissions:
                         os.chmod(folder, 0o666)
@@ -132,12 +128,12 @@ while running:
                         print(file.modified_s)
                     #os.utime(folder, times=(file.modified_s, file.modified_s))
                 # we directly create symlinks
-                elif file.type == BEP.FileInfoType.Value("SYMLINK"):
+                elif file.type == bep.FileInfoType.Value("SYMLINK"):
                     os.symlink(FOLDER_TARGET + message.folder + "/" + file.symlink_target, folder)
                     #os.utime(folder, times=(file.modified_s, file.modified_s))
                 # else send request for files
                 else:
-                    request = BEP.Request()
+                    request = bep.Request()
                     request.id = REQUEST_ID
                     request.folder = message.folder
                     request.name = file.name
@@ -148,7 +144,7 @@ while running:
                     requestList.append(request)
                     # add permissions
                     fileList.append(file)
-                    sock.send(request, BEP.MessageType.Value("REQUEST"))
+                    sock.send(request, bep.MessageType.Value("REQUEST"))
                     REQUEST_ID += 1
         print("---", file=open("output.txt", "a"))
         print(message, file=open("output.txt", "a"))
