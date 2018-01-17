@@ -5,12 +5,14 @@ import BEPv1_pb2 as bep
 from cryptography import x509
 from cryptography.hazmat.backends import default_backend
 from cryptography.hazmat.primitives import hashes
+from Pinger import Pinger
 
 BASE32_ALPHABET = "ABCDEFGHIJKLMNOPQRSTUVWXYZ234567"
 MAX_SSL_FRAME = 16384
 
 DEVICE_NAME = "Gabi"
-FOLDER_TARGET = "/Users/vincetournier/Documents/syncthing"
+#FOLDER_TARGET = "/Users/vincetournier/Documents/syncthing"
+FOLDER_TARGET = "/home/gabriel/Bureau/bullshit/"
 REQUEST_ID = 0
 
 
@@ -55,11 +57,17 @@ certHash = base64.b32encode(cert.fingerprint(hashes.SHA256()))
 device_id = format_id(certHash)
 
 sock = SyncthingSocket.SyncthingSocket("129.194.186.177", 22000, "cert.pem", "key.pem")
+
+# start ping thread
+ping = Pinger(sock, 90)
+ping.start()
+
 hello = bep.Hello()
 hello.device_name = DEVICE_NAME
 hello.client_name = "SimpleSyncthing"
 hello.client_version = "v0.14.43"
 sock.send(hello, -1, hello=True)
+ping.reset_timer()
 
 hello = sock.is_message_available(hello_expected=True)
 if hello is None:
@@ -94,18 +102,19 @@ for folder in cluster.folders:
 
 
 sock.send(loc_cluster, bep.MessageType.Value("CLUSTER_CONFIG"))
+ping.reset_timer()
 
-print("", file=open("output.txt", "w"))
+#print("", file=open("output.txt", "w"))
 
 requestList = []
 fileList = []
-running = True
-while running:
+
+while True:
+
     message_tuple = sock.is_message_available()
     if message_tuple is None:
         print("nothing, closing")
-        running = False
-        break
+        continue
 
     message = message_tuple[0]
     m_type = message_tuple[1]
@@ -145,9 +154,10 @@ while running:
                     # add permissions
                     fileList.append(file)
                     sock.send(request, bep.MessageType.Value("REQUEST"))
+                    ping.reset_timer()
                     REQUEST_ID += 1
-        print("---", file=open("output.txt", "a"))
-        print(message, file=open("output.txt", "a"))
+        #print("---", file=open("output.txt", "a"))
+        #print(message, file=open("output.txt", "a"))
 
     if m_type == "RESPONSE":
         response = requestList[message.id]
@@ -171,7 +181,3 @@ while running:
     # print(file, file=open("output.txt", "a"))
 
 sock.close()
-
-
-
-
