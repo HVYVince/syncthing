@@ -108,21 +108,15 @@ for folder in cluster.folders:
 sock.send(loc_cluster, bep.MessageType.Value("CLUSTER_CONFIG"))
 ping.reset_timer()
 
-#print("", file=open("output.txt", "w"))
-
-running = True
 manager = IndexManager.IndexManager(sock, ping, args["folder"])
 
-while running:
+while True:
     message_tuple = sock.is_message_available()
     if message_tuple is None:
         print("Checking missing blocks")
-        if not manager.req_all_missing():
-            print("nothing")
-            running = False
-            break
-        else:
-            continue
+        manager.req_all_missing()
+        print("nothing to update")
+        continue
 
     message = message_tuple[0]
     m_type = message_tuple[1]
@@ -152,7 +146,5 @@ while running:
             os.utime(filepath, times=(request.modified_s, request.modified_s))
         if folder_time != (0, 0):
             os.utime(filepath, folder_time)
-
-    # print(file, file=open("output.txt", "a"))
 
 sock.close()

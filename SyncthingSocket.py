@@ -104,13 +104,6 @@ class SyncthingSocket(object):
         packet += header_message
         packet += struct.pack("!I", serial_len)
         packet += serial
-        if (header.type == bep.MessageType.Value("PING")):
-            print(packet)
-            print(header_len)
-            print(header)
-            print(serial_len)
-            print(message)
-            print(serial)
         self.ssl_sock.send(packet)
         return
 
