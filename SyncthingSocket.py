@@ -4,6 +4,7 @@ import BEPv1_pb2 as bep
 import struct
 import lz4.block as lz4
 
+
 MAX_SSL_FRAME = 16384
 
 
@@ -60,9 +61,9 @@ class SyncthingSocket(object):
             raise Exception("CLUSTER CONFIG NOT RECEIVED")
 
         if header.compression == bep.MessageCompression.Value("LZ4"):
-            print(bep.MessageCompression.Name(header.compression))
+            # print(bep.MessageCompression.Name(header.compression))
             uncompressed_len = struct.unpack("!I", data[0:4])[0]
-            print(data[4:])
+            # print(data[4:])
             data = lz4.decompress(data[4:], uncompressed_size=uncompressed_len)
 
         if header.type == bep.MessageType.Value("CLUSTER_CONFIG"):
@@ -103,6 +104,13 @@ class SyncthingSocket(object):
         packet += header_message
         packet += struct.pack("!I", serial_len)
         packet += serial
+        if (header.type == bep.MessageType.Value("PING")):
+            print(packet)
+            print(header_len)
+            print(header)
+            print(serial_len)
+            print(message)
+            print(serial)
         self.ssl_sock.send(packet)
         return
 

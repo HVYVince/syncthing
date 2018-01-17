@@ -7,11 +7,18 @@ from cryptography import x509
 from cryptography.hazmat.backends import default_backend
 from cryptography.hazmat.primitives import hashes
 from Pinger import Pinger
+import argparse
 
 BASE32_ALPHABET = "ABCDEFGHIJKLMNOPQRSTUVWXYZ234567"
 MAX_SSL_FRAME = 16384
 
 DEVICE_NAME = "Gabi"
+
+# construct the argument parse and parse the arguments
+ap = argparse.ArgumentParser()
+ap.add_argument("-f", "--folder", required=True,
+	help="destination path of shared folder")
+args = vars(ap.parse_args())
 
 def generate_luhn_char(datas):
     factor = 2
@@ -104,14 +111,14 @@ ping.reset_timer()
 #print("", file=open("output.txt", "w"))
 
 running = True
-manager = IndexManager.IndexManager(sock)
+manager = IndexManager.IndexManager(sock, ping, args["folder"])
 
 while running:
     message_tuple = sock.is_message_available()
     if message_tuple is None:
         print("Checking missing blocks")
         if not manager.req_all_missing():
-            print("nothing, closing")
+            print("nothing")
             running = False
             break
         else:

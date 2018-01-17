@@ -14,10 +14,10 @@ class Pinger(Thread):
     def run(self):
         while True:
             if (time.time() - self.strt) >= self.time:
-                print("send PING")
                 ping = bep.Ping()
                 self.sock.send(ping, bep.MessageType.Value("PING"))
                 self.strt = time.time()  # reset timer
+                print("ping sent")
 
 
     def reset_timer(self):

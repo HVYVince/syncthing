@@ -1,17 +1,17 @@
 import os
 import BEPv1_pb2 as bep
 
-FOLDER_TARGET = "/Users/vincetournier/Documents/syncthing"
-
-
 class IndexManager(object):
 
-    def __init__(self, syncsock):
+    def __init__(self, syncsock, ping, f_target):
+        global FOLDER_TARGET
         self.files = []
         self.called = []
         self.received = []
         self.directories = []
         self.sock = syncsock
+        self.ping = ping
+        FOLDER_TARGET = f_target
         return
 
     def add_index(self, message):
@@ -77,6 +77,7 @@ class IndexManager(object):
             request.size = file.size
             request.from_temporary = False
             self.sock.send(request, bep.MessageType.Value("REQUEST"))
+            self.ping.reset_timer()
         self.called[i] = True
         return
 
