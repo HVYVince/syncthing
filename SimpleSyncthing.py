@@ -1,5 +1,6 @@
 import base64
 import SyncthingSocket
+import IndexManager
 import os
 import BEPv1_pb2 as bep
 from cryptography import x509
@@ -11,10 +12,6 @@ BASE32_ALPHABET = "ABCDEFGHIJKLMNOPQRSTUVWXYZ234567"
 MAX_SSL_FRAME = 16384
 
 DEVICE_NAME = "Gabi"
-#FOLDER_TARGET = "/Users/vincetournier/Documents/syncthing"
-FOLDER_TARGET = "/home/gabriel/Bureau/bullshit/"
-REQUEST_ID = 0
-
 
 def generate_luhn_char(datas):
     factor = 2
@@ -106,77 +103,48 @@ ping.reset_timer()
 
 #print("", file=open("output.txt", "w"))
 
-requestList = []
-fileList = []
+running = True
+manager = IndexManager.IndexManager(sock)
 
-while True:
-
+while running:
     message_tuple = sock.is_message_available()
     if message_tuple is None:
-        print("nothing, closing")
-        continue
+        print("Checking missing blocks")
+        if not manager.req_all_missing():
+            print("nothing, closing")
+            running = False
+            break
+        else:
+            continue
 
     message = message_tuple[0]
     m_type = message_tuple[1]
 
     if m_type == "INDEX" or m_type == "INDEX_UPDATE":
-        # folders creation
-        os.makedirs(FOLDER_TARGET + message.folder, exist_ok=True)
-        # Let's fill folders
-        for file in message.files:
-            # we don't request for deleted files
-            if not file.deleted:
-                folder = FOLDER_TARGET + message.folder + "/" + file.name
-                # we directly create directories and symlinks
-                if file.type == bep.FileInfoType.Value("DIRECTORY"):
-                    os.makedirs(folder, exist_ok=True)
-                    if file.no_permissions:
-                        os.chmod(folder, 0o666)
-                    else:
-                        os.chmod(folder, file.permissions)
-                        print(file.modified_s)
-                    os.utime(folder, times=(file.modified_s, file.modified_s))
-                # we directly create symlinks
-                elif file.type == bep.FileInfoType.Value("SYMLINK"):
-                    os.symlink(FOLDER_TARGET + message.folder + "/" + file.symlink_target, folder)
-                    #os.utime(folder, times=(file.modified_s, file.modified_s))
-                # else send request for files
-                else:
-                    request = bep.Request()
-                    request.id = REQUEST_ID
-                    request.folder = message.folder
-                    request.name = file.name
-                    request.offset = 0
-                    request.size = file.size
-                    request.from_temporary = False
-                    # add request to request queue
-                    requestList.append(request)
-                    # add permissions
-                    fileList.append(file)
-                    sock.send(request, bep.MessageType.Value("REQUEST"))
-                    ping.reset_timer()
-                    REQUEST_ID += 1
-        #print("---", file=open("output.txt", "a"))
-        #print(message, file=open("output.txt", "a"))
+        manager.add_index(message)
+        manager.send_next_packet()
 
     if m_type == "RESPONSE":
-        response = requestList[message.id]
-        folder = FOLDER_TARGET + response.folder + "/" + response.name
+        manager.acknowledge(message.id)
+        request = manager.get_request(message.id)[1]
+        filepath = IndexManager.FOLDER_TARGET + manager.get_request(message.id)[0] + "/"
+        filepath += request.name
         try:
-            folder_stat = os.stat(folder)
+            folder_stat = os.stat(filepath)
             folder_time = (folder_stat.st_mtime, folder_stat.st_mtime)
         except FileNotFoundError:
             folder_time = (0, 0)
-        with open(folder, 'wb') as f:
-            print("writing " + folder)
+        os.makedirs(os.path.dirname(filepath), exist_ok=True)
+        with open(filepath, 'wb') as f:
+            print("writing " + filepath)
             f.write(message.data)
-            if fileList[message.id].no_permissions:
-                os.chmod(folder, 0o666)
+            if request.no_permissions:
+                os.chmod(filepath, 0o666)
             else:
-                os.chmod(folder, fileList[message.id].permissions)
-            os.utime(folder, times=(fileList[message.id].modified_s, fileList[message.id].modified_s))
+                os.chmod(filepath, request.permissions)
+            os.utime(filepath, times=(request.modified_s, request.modified_s))
         if folder_time != (0, 0):
-            os.utime(folder, folder_time)
+            os.utime(filepath, folder_time)
 
     # print(file, file=open("output.txt", "a"))
 
