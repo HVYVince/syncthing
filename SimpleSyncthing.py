@@ -126,7 +126,7 @@ while running:
                     else:
                         os.chmod(folder, file.permissions)
                         print(file.modified_s)
-                    #os.utime(folder, times=(file.modified_s, file.modified_s))
+                    os.utime(folder, times=(file.modified_s, file.modified_s))
                 # we directly create symlinks
                 elif file.type == bep.FileInfoType.Value("SYMLINK"):
                     os.symlink(FOLDER_TARGET + message.folder + "/" + file.symlink_target, folder)
@@ -152,6 +152,11 @@ while running:
     if m_type == "RESPONSE":
         response = requestList[message.id]
         folder = FOLDER_TARGET + response.folder + "/" + response.name
+        try:
+            folder_stat = os.stat(folder)
+            folder_time = (folder_stat.st_mtime, folder_stat.st_mtime)
+        except FileNotFoundError:
+            folder_time = (0, 0)
         with open(folder, 'wb') as f:
             print("writing " + folder)
             f.write(message.data)
@@ -160,6 +165,8 @@ while running:
             else:
                 os.chmod(folder, fileList[message.id].permissions)
             os.utime(folder, times=(fileList[message.id].modified_s, fileList[message.id].modified_s))
+        if folder_time != (0, 0):
+            os.utime(folder, folder_time)
 
     # print(file, file=open("output.txt", "a"))
 

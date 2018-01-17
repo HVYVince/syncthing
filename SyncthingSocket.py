@@ -51,6 +51,8 @@ class SyncthingSocket(object):
 
         except ssl.SSLError:
             return None
+        except socket.timeout:
+            return None
 
         header = bep.Header.FromString(header_data)
         if cluster_expected and header.type != bep.MessageType.Value("CLUSTER_CONFIG"):
