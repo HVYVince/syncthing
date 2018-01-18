@@ -4,13 +4,27 @@ import BEPv1_pb2 as bep
 import struct
 import lz4.block as lz4
 
+"""
+Authors : Tournier Vincent, Da Silva Marques Gabriel
+Date    : January 2018
+Version : 0.1
 
-MAX_SSL_FRAME = 16384
+Description : Everything about socket is here
+"""
 
 
 class SyncthingSocket(object):
-
+    """
+    Class used to create, send and receive packet trought socket
+    """
     def __init__(self, ip, port, cert, keyfile):
+        """ Initialize the connection with the syncthing server
+
+        :param ip: ip of destination
+        :param port: port of destination
+        :param cert: certificate to identify yourself
+        :param keyfile: key to prove who you are
+        """
         sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         sock.settimeout(10)
         context = ssl.create_default_context(ssl.Purpose.CLIENT_AUTH, capath=cert)
@@ -21,6 +35,11 @@ class SyncthingSocket(object):
         return
 
     def receive(self, byteLength):
+        """ Read byteLength bytes from socket
+
+        :param byteLength: length we want to read from socket
+        :return: what we read
+        """
         chunks = []
         bytes_recd = 0
         while bytes_recd < byteLength:
@@ -32,6 +51,15 @@ class SyncthingSocket(object):
         return b''.join(chunks)
 
     def is_message_available(self, hello_expected=False, cluster_expected=False):
+        """ Check if a message is available
+
+        If a hello or a cluster_config is expected we process them directly here and raise an error if we receive
+        something else
+
+        :param hello_expected: True if the next message MUST be a hello
+        :param cluster_expected: True if the next message MUST be a cluster config
+        :return: a message in is bep format, a string containing format
+        """
         try:
             if hello_expected:
                 if not bytes(self.receive(4)).__eq__(0x2EA7D90B):
@@ -44,8 +72,9 @@ class SyncthingSocket(object):
             header_data = bytes(self.receive(header_len))
             message_len = struct.unpack("!I", self.receive(4))[0]
             byte_count = 0
-            data = bytes()
+            data = bytes()  # will contain the message
 
+            # receive all bytes from message
             while message_len > byte_count:
                 data += bytes(self.receive(message_len - byte_count))
                 byte_count = len(data)
@@ -56,6 +85,7 @@ class SyncthingSocket(object):
             return None
 
         header = bep.Header.FromString(header_data)
+        # if a cluster_config is expected and we don't receive it we quit the program
         if cluster_expected and header.type != bep.MessageType.Value("CLUSTER_CONFIG"):
             self.ssl_sock.close()
             raise Exception("CLUSTER CONFIG NOT RECEIVED")
@@ -84,6 +114,13 @@ class SyncthingSocket(object):
             return None
 
     def send(self, message, message_type, hello=False):
+        """ Send a packet trought socket
+
+        :param message: the bep message to send
+        :param message_type: type of bep message
+        :param hello: True if it's a hello to send
+        :return:
+        """
         if hello:
             hello_message = message.SerializeToString()
             packet = struct.pack("!I", 0x2EA7D90B)
@@ -108,69 +145,9 @@ class SyncthingSocket(object):
         return
 
     def close(self):
+        """ Close connection
+
+        :return:
+        """
         self.ssl_sock.close()
         return
-
-    def receive_message(self):
-        print("[BEP.V1]  Waiting for a message ...")
-
-        # Header Length
-        received = self.ssl_sock.recv(2)
-        header_length = struct.unpack(">h", received)[0]
-
-        # Header
-        received = self.ssl_sock.recv(header_length)
-        header = bep.Header()
-        header.ParseFromString(received)
-
-        # Message length
-        received = self.ssl_sock.recv(4)
-        message_length = struct.unpack(">i", received)[0]
-        print("[BEP.V1] -> Message length : " + str(message_length))
-
-        # Message
-        received = self.ssl_sock.recv(message_length)
-
-        if header.compression == bep.LZ4:
-            # When the compression field is LZ4, the message consists of a 32 bit integer describing
-            # the uncompressed message length followed by a single LZ4 block. After decompressing
-            # the LZ4 block it should be interpreted as a protocol buffer message just as in the uncompressed case.
-            uncompressed_message_length = struct.unpack(">i", received[0:4])[0]
-            compressed_message = received[4:]
-            print("[BEP.V1] -> Uncompressed message length : " + str(uncompressed_message_length))
-            print("[BEP.V1] -> Decompress message ..")
-            received = lz4.decompress(compressed_message, uncompressed_message_length)
-
-        if header.type == bep.CLUSTER_CONFIG:
-            # self.log("[BEP.V1] Received CLUSTER_CONFIG", Logger.INFO_ALL)
-            message = bep.ClusterConfig()
-            message.ParseFromString(received)
-        elif header.type == bep.INDEX:
-            # self.log("[BEP.V1] Received INDEX", Logger.INFO_ALL)
-            message = bep.Index()
-            message.ParseFromString(received)
-        elif header.type == bep.INDEX_UPDATE:
-            # self.log("[BEP.V1] Received INDEX_UPDATE", Logger.INFO_ALL)
-            message = bep.Index()
-            message.ParseFromString(received)
-        elif header.type == bep.REQUEST:
-            # self.log("[BEP.V1] Received REQUEST", Logger.INFO_ALL)
-            message = bep.Request()
-            message.ParseFromString(received)
-        elif header.type == bep.RESPONSE:
-            # self.log("[BEP.V1] Received RESPONSE", Logger.INFO_ALL)
-            message = bep.Response()
-            message.ParseFromString(received)
-        elif header.type == bep.PING:
-            # self.log("[BEP.V1] Received PING", Logger.INFO_ALL)
-            message = bep.Ping()
-            message.ParseFromString(received)
-        elif header.type == bep.CLOSE:
-            # self.log("[BEP.V1] Received CLOSE", Logger.INFO_ALL)
-            message = bep.Close()
-            message.ParseFromString(received)
-        else:
-            # self.log("[BEP.V1] Warning. Received UNKNOWN", Logger.WARNING)
-            message = received
-
-        return message
