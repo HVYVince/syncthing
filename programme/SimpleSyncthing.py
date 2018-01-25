@@ -68,7 +68,7 @@ ping.reset_timer()
 
 # state 4 --> start transmissoin of files
 # Indexmanager is used to manage the request command for each file
-manager = IndexManager.IndexManager(sock, ping, args["folder"])
+manager = IndexManager.IndexManager(sock, ping, args["folder"]+ "/")
 
 while True:
     message_tuple = sock.is_message_available()
