@@ -5,7 +5,7 @@ import struct
 import lz4.block as lz4
 
 """
-Authors : Tournier Vincent, Da Silva Marques Gabriel
+Authors : Da Silva Marques Gabriel, Tournier Vincent
 Date    : January 2018
 Version : 0.1
 
@@ -15,7 +15,7 @@ Description : Everything about socket is here
 
 class SyncthingSocket(object):
     """
-    Class used to create, send and receive packet trought socket
+    Class used to create, send and receive packet through socket
     """
     def __init__(self, ip, port, cert, keyfile):
         """ Initialize the connection with the syncthing server
@@ -91,9 +91,7 @@ class SyncthingSocket(object):
             raise Exception("CLUSTER CONFIG NOT RECEIVED")
 
         if header.compression == bep.MessageCompression.Value("LZ4"):
-            # print(bep.MessageCompression.Name(header.compression))
             uncompressed_len = struct.unpack("!I", data[0:4])[0]
-            # print(data[4:])
             data = lz4.decompress(data[4:], uncompressed_size=uncompressed_len)
 
         if header.type == bep.MessageType.Value("CLUSTER_CONFIG"):

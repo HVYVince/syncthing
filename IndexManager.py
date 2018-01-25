@@ -2,12 +2,15 @@ import os
 import BEPv1_pb2 as bep
 
 """
-Authors : Tournier Vincent, Da Silva Marques Gabriel
+Authors : Da Silva Marques Gabriel, Tournier Vincent
 Date    : January 2018
 Version : 0.1
 
 Description : Manage files requests and responses
 """
+
+FOLDER_TARGET = "download"
+
 
 class IndexManager(object):
     """

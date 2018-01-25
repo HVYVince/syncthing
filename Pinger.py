@@ -3,12 +3,13 @@ import BEPv1_pb2 as bep
 from threading import Thread
 
 """
-Authors : Tournier Vincent, Da Silva Marques Gabriel
+Authors : Da Silva Marques Gabriel, Tournier Vincent
 Date    : January 2018
 Version : 0.1
 
 Description : Thread which send a bep ping periodically.
 """
+
 
 class Pinger(Thread):
 
@@ -35,7 +36,6 @@ class Pinger(Thread):
                 self.sock.send(ping, bep.MessageType.Value("PING"))
                 self.strt = time.time()  # reset timer
                 print("ping sent")
-
 
     def reset_timer(self):
         """ Reset the timer

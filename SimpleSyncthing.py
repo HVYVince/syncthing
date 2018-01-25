@@ -6,19 +6,18 @@ from Pinger import Pinger
 import argparse
 
 """
-Authors : Tournier Vincent, Da Silva Marques Gabriel
+Authors : Da Silva Marques Gabriel, Tournier Vincent
 Date    : January 2018
 Version : 0.1
 
-Description : main program of synchting client, only work for one first connection.
+Description : Main program of syncthing client, only work for one first connection.
 """
 
 DEVICE_NAME = "Gabi"
 
 # construct the argument parse and parse the arguments
 ap = argparse.ArgumentParser()
-ap.add_argument("-f", "--folder", required=True,
-	help="destination path of shared folder")
+ap.add_argument("-f", "--folder", required=True, help="destination path of shared folder")
 args = vars(ap.parse_args())
 
 # state 1 --> connexion TCP
@@ -110,5 +109,3 @@ while True:
             os.utime(filepath, times=(request.modified_s, request.modified_s))
         if folder_time != (0, 0):
             os.utime(filepath, folder_time)
-
-sock.close()
