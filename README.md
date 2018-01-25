@@ -2,8 +2,8 @@
 
 Client permettant de récupérer les fichiers présents sur un dépôt syncthing distant en lecture seule.
 
-Pour lancer notre client qui se trouve dans le dossier "programme" faut au préalable avoir une connexion à internet et que le dossier destination soit vide.
+Pour lancer notre client qui se trouve dans le dossier "programme" il faut au préalable avoir une connexion à internet et que le dossier destination soit vide.
 
-Si tout est bon vous lancer notre code avec cette syntaxe : python3 SimpleSyncthing.py -f "dossier destination/"
+Si tout est bon vous lancez notre code avec cette syntaxe : python3 SimpleSyncthing.py -f "dossier destination"
 
 Des retours seront affichés dans le terminal pour connaître l'état actuel du processus.
